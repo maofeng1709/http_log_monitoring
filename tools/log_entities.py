@@ -3,7 +3,7 @@
  * Email : maofeng.fr@gmail.com
  * Last modified : 2018-09-13 19:37
  * Filename : data_structures.py
- * Description : 
+ * Description : 3 classes of http log - LogRecord, LogInterval and LogWindow
 '''''''''''''''''
 import logging
 from copy import deepcopy

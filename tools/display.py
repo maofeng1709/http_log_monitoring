@@ -3,7 +3,7 @@
  * Email : maofeng.fr@gmail.com
  * Last modified :	2018-09-15 19:35
  * Filename :		display.py
- * Description : 
+ * Description : tools for displaying messages, including output formatting, coloring and hierachical logging  
 '''''''''''''''''
 
 import logging

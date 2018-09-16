@@ -18,6 +18,7 @@ class Config():
         self.MIN_WINDOW_SIZE = 2
         self.MIN_ALERT_THRESHOLD = 1
         self.LOGGING_LEVEL = logging.INFO
+        self.SERVER_PORT = 80
 
     @property
     def INTERVAL_SIZE(self):

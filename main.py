@@ -39,6 +39,7 @@ def initializer(argv):
     for o, a in opts:
         if o in ('-h', '--help'):
             usage()
+            sys.exit(2)
         elif o == '--test':
             test_mode = True
         elif o == '--debug':

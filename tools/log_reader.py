@@ -3,7 +3,7 @@
  * Email : maofeng.fr@gmail.com
  * Last modified : 2018-09-14 11:02
  * Filename : log_reader.py
- * Description : 
+ * Description : tools for reading specific logs, optimized by always remembering the file offset of last valid record that has been read 
 '''''''''''''''''
 
 import re

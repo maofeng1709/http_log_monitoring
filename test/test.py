@@ -3,7 +3,7 @@
  * Email : maofeng.fr@gmail.com
  * Last modified : 2018-09-15 19:34
  * Filename : test.py
- * Description : 
+ * Description : test the alert logic by simulating periodically a certain number of requests so that the alert message can be toggled and than recovered.
 '''''''''''''''''
 
 import logging
