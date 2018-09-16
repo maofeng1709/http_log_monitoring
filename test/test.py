@@ -18,11 +18,13 @@ logger = logging.getLogger('root')
 sections = ['', 'ohlala', 'ohmygod', 'mondieu', 'wodemaya']
 
 def test_alert_logic():
+    logger.info('test function started, generating requests ...', color=35)
     for i in range(config.WINDOW_SIZE // 2):
         n = config.ALERT_THRESHOLD * config.INTERVAL_SIZE * 5
         simulate_requests(n) 
         logger.info('{} requests simulated'.format(n), color=35)
         time.sleep(config.INTERVAL_SIZE // 2)
+    logger.info('test function sleeping ...', color=35)
     time.sleep(config.INTERVAL_SIZE * config.WINDOW_SIZE)
 
      
