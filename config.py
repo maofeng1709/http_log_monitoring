@@ -16,7 +16,7 @@ class Config():
         self._ALERT_THRESHOLD = 10
         self.MIN_INTERVAL_SIZE = 5
         self.MIN_WINDOW_SIZE = 2
-        self.MIN_ALERT_THRESHOLD = 5
+        self.MIN_ALERT_THRESHOLD = 1
         self.LOGGING_LEVEL = logging.INFO
 
     @property

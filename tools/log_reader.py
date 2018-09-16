@@ -7,7 +7,7 @@
 '''''''''''''''''
 
 import re
-from tools.data_structures import LogRecord, LogInterval, LogWindow
+from tools.log_entities import LogRecord, LogInterval, LogWindow
 from config import config
 from datetime import datetime, timedelta
 import logging
@@ -20,7 +20,7 @@ def read_record(record_line, offset):
         read a record form a record line, if an exceprion occurs, return None
 
     """
-
+    # ------------------ ['ip', 'client_id', 'user_id', 'time', 'time_zone', 'req_line', 'status', 'size']
     record_pattern = re.compile('^(.*?) (.*?) (.*?) \[(.*?) (.*?)\] "(.*?)" (.*?) (.*?)$')
     record_values = re.findall(record_pattern, record_line)
     if record_values:
@@ -34,8 +34,6 @@ def read_record(record_line, offset):
 
 
 def read_interval(start_dt, end_dt, offset = 0):
-    logger.info('reading interval from {} to {}, given offset = {}'.format(start_dt, end_dt, offset))
-
     records = []
     try:
         with open(config.LOG_FILE, 'r') as f:
@@ -57,7 +55,9 @@ def read_interval(start_dt, end_dt, offset = 0):
         logger.exception(str(err))
 
     finally:
-        return (LogInterval(records, start_dt, end_dt), offset)
+        interval = LogInterval(records, start_dt, end_dt, offset)
+        logger.debug('interval read: ' + str(interval))
+        return interval
 
 def read_last_window():
     logger.info('reading last window ...')
@@ -71,9 +71,8 @@ def read_last_window():
     offset = 0
     for i in range(config.WINDOW_SIZE):
         start_dt, end_dt = dts[i], dts[i+1]
-        interval, offset = read_interval(start_dt, end_dt, offset)
-        logger.debug(str(interval))
-
+        interval = read_interval(start_dt, end_dt, offset)
+        offset = interval.offset
         intervals.append(interval)
 
     return LogWindow(intervals)

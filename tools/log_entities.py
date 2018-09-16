@@ -6,9 +6,10 @@
  * Description : 
 '''''''''''''''''
 import logging
+from copy import deepcopy
 from config import config
 from datetime import datetime
-from collections import deque
+from collections import deque, defaultdict
 
 logger = logging.getLogger('root')
 
@@ -36,7 +37,6 @@ class LogRecord():
         self.datetime = datetime.strptime(self.time + ' ' + self.time_zone, '%d/%b/%Y:%H:%M:%S %z')
 
         self.section = '/'.join(self.req_resource.split('/')[:4]) if self.req_resource.startswith('http') else '/'.join(self.req_resource.split('/')[:2])
-
             
     def __str__(self):
         return ' '.join([self.ip, self.client_id, self.user_id, '[{} {}]'.format(self.datetime, self.time_zone),
@@ -44,19 +44,13 @@ class LogRecord():
 
 
 class LogInterval():
-    def __init__(self, records, start_dt, end_dt):
+    def __init__(self, records, start_dt, end_dt, offset):
         self.records = records
         self.start_dt = start_dt
         self.end_dt = end_dt
 
-        self.offset = records[-1].offset if records else 0
+        self.offset = offset # attr offset is necessary since records could be empty
         self.n_records = len(records)
-        self.section_dict = dict()
-        for record in records:
-            if record.section not in self.section_dict:
-                self.section_dict[record.section] = 1
-            else:
-                self.section_dict[record.section] += 1
 
     def __str__(self):
         return 'LogInterval from {} to {} with {} records'.format(self.start_dt, self.end_dt, self.n_records)
@@ -72,41 +66,29 @@ class LogWindow():
         assert len(intervals) == config.WINDOW_SIZE, 'Initilizing LogWindow with incorrect number of intervals'
         self.dq = deque(intervals)
 
-        self.alert_state = 0
-        self.n_records = 0
+        self.alert_state = 0 # 0: normal state, 1: recover state, 2: alert state
+        self.offset = intervals[-1].offset
 
-        self.section_dict = dict()
-        for interval in intervals:
-            self.n_records += interval.n_records
-            for section, n_hits in interval.section_dict.items():
-                if section not in self.section_dict:
-                    self.section_dict[section] = n_hits
-                else:
-                    self.section_dict[section] += n_hits
+        self.stats = sum([Stats(interval) for interval in intervals])
 
-        self.start_dt, self.end_dt = intervals[0].start_dt, intervals[-1].end_dt
+
+        self.start_dt, self.end_dt = self.dq[0].start_dt, self.dq[-1].end_dt
         self.update_alert_state()
+
 
     def slide(self, interval):
         popped_interval = self.dq.popleft()
         self.dq.append(interval)
 
-        self.n_records += interval.n_records - popped_interval.n_records
-
-        for section, n_hits in popped_interval.section_dict.items():
-            self.section_dict[section] -= n_hits
-        for section, n_hits in interval.section_dict.items():
-            if section not in self.section_dict:
-                self.section_dict[section] = n_hits
-            else:
-                self.section_dict[section] += n_hits
+        self.offset = interval.offset
         
-        self.start_dt, self.end_dt = intervals[0].start_dt, intervals[-1].end_dt
+        self.stats += Stats(interval) - Stats(popped_interval)
+        
+        self.start_dt, self.end_dt = self.dq[0].start_dt, self.dq[-1].end_dt
         self.update_alert_state()
-
         
     def update_alert_state(self):
-        avg_records = self.n_records / (self.end_dt - self.start_dt).total_seconds()
+        avg_records = self.stats.dict['n_records'] / (self.end_dt - self.start_dt).total_seconds()
         if avg_records >= config.ALERT_THRESHOLD:
             self.alert_state = 2
         else:
@@ -115,15 +97,64 @@ class LogWindow():
             else:
                 self.alert_state = 0
 
-    def get_stats(self):
-        avg_records = self.n_records / (self.end_dt - self.start_dt).total_seconds()
-        stats = dict() 
-        stats['max_section'] = max(self.section_dict.items(), key=lambda x: x[1]) if self.section_dict else 'no section visited'
-        stats['n_hits'] = self.n_records + ' ' + 'High traffic alert recovered - average hits -{}'.foramt(avg_records) if self.alert_state == 1 else 'High traffic generated an alert - average hits: {}'.format(avg_records)
-        return stats
-
     def __str__(self):
-        return 'LogWindow with {} intervals, and totally {} records'.format(config.WINDOW_SIZE, self.n_records)
+        return 'LogWindow with {} intervals, and totally {} records'.format(config.WINDOW_SIZE, self.stats.dict['n_records'])
+
+class Stats():
+    INCREMENT, ACCUMULATION, DICTIONARY = 1,2,3
+    stats_type_ref = {
+        'n_records': INCREMENT,
+        'size': ACCUMULATION,
+        'section': DICTIONARY,
+        'req_method': DICTIONARY,
+        'req_protocol': DICTIONARY,
+        'status': DICTIONARY
+    }
+    
+    def __init__(self, interval):
+        self.dict = {key: defaultdict(lambda: 0) if t == self.DICTIONARY else 0 for key, t in self.stats_type_ref.items()}
+        for record in interval.records:
+            for key, t in self.stats_type_ref.items():
+                if t == self.INCREMENT:
+                    self.dict[key] += 1
+                elif t == self.ACCUMULATION:
+                    val = getattr(record, key)
+                    if val == '-': # unknown property
+                        val = 0
+                    self.dict[key] += int(val) 
+                else: # t == dict
+                    self.dict[key][getattr(record, key)] += 1
+
+    def __add__(self, s):
+        res = deepcopy(self)
+        for key, t in res.dict.items():
+            if self.stats_type_ref[key] != self.DICTIONARY:
+                res.dict[key] += s.dict[key]
+            else: # t == dict
+                for key_ in (set(res.dict[key]) | set(s.dict[key])):
+                    res.dict[key][key_] += s.dict[key][key_]
+
+        return res
+
+    def __sub__(self, s):
+        res = deepcopy(self)
+        for key, t in res.dict.items():
+            if self.stats_type_ref[key] != self.DICTIONARY:
+                res.dict[key] -= s.dict[key]
+            else: # t == dict
+                for key_ in (set(res.dict[key]) | set(s.dict[key])):
+                    res.dict[key][key_] -= s.dict[key][key_]
+        return res
+
+    def __radd__(self, s):
+        if s == 0:
+            return self
+        elif not isinstance(s, Stats):
+            raise TypeError(" + operation not allowed between Stats and {}".format(type(s)))
+        else:
+            return s + self
+
+
 
     
 
